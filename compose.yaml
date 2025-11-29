@@ -1,33 +1,10 @@
-name: bipolar-data
+name: reddit-data
 
 services:
-  #db:
-  #  image: mongo:latest
-  #  restart: always
-  #  ports:
-  #    - "27017:27017"
-  #  environment:
-  #    MONGO_INITDB_ROOT_USERNAME: root
-  #    MONGO_INITDB_ROOT_PASSWORD: zU!33oPrKkkp_V-WH2NW
-  #  volumes:
-  #    - ./mongo-data:/data/db
-
   app:
     build: .
     command: python -u ./scripts/main.py
     ports:
       - "5000:5000"
-    #volumes:
-    #  - .:/app
     env_file:
       - ./app.env
-    develop:
-      watch:
-        - path: ./scripts
-          action: rebuild
-          target: /src/scripts
-          initial_sync: true
-        - path: requirements.txt
-          action: rebuild
-    #depends_on:
-    #  - db
