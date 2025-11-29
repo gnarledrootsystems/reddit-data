@@ -115,10 +115,29 @@ def process_json_to_mongodb(json_data, mongodb_client = None):
                 duplicate_count += 1
             except Exception as e:
                 failed_count += 1
+    
+    print(MAGENTA + f"Saved to MongoDB: {insert_count} Posts. Duplicated: {duplicate_count}, Failed: {failed_count}" + RESET)
+    
+    # Once we start having duplicate inserts, we've caught up with posts already pulled
+    if duplicate_count > 0:
+        return True
                  
-            
-    print(GREEN + f"Saved to MongoDB: {insert_count} Posts. Duplicated: {duplicate_count}, Failed: {failed_count}" + RESET)
+    return False
+    
+
+def check_endpoint_headers(url, headers):
+    try:
+        response = requests.head(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            print(GREEN + f"{response.status_code} OK - Header Ping Success" + RESET)
+        else:
+            print(RED + f"{response.status_code} - Header Ping Failure" + RESET)
         
+        return response.status_code, True
+    except requests.exceptions.RequestException as e:
+        print(CYAN + f"{response.status_code} - Header Ping Exception: {e}" + RESET)
+        return response.status_code, True
+     
 """
 Handle GET Requests to the Reddit Page
 Retries a max of 3 times during Rate Limiting before exiting
@@ -143,34 +162,35 @@ def fetch_reddit_posts(after = "", mongodb_client = None):
         retry_pause_interval = 60
         
         while retry < retry_limit:
-            response = requests.get(url, headers, timeout=5)
+            response, is_ping = check_endpoint_headers(url, headers)
             
+            if response == 200 and is_ping:
+                is_ping = False
+                print(CYAN + f"Ping Success - Running Post Fetch..." + RESET)
+                pause_exec(5)
+                response = requests.get(url, headers, timeout=5)
+                
             if response.status_code == 429:
                 print(RED + f"#### Rate Limit Reached: Status Code {response.status_code} - Displaying Response Headers ####" + RESET)
-                for header_name, header_value in response.headers.items():
-                    print(RED + f"{header_name}: {header_value}" + RESET)
-                    
-                retry += 1
-                if retry == retry_limit:
-                    response.raise_for_status()
-                    break 
-                
-                print(CYAN + f"Pausing for {retry_pause_interval} seconds then retrying GET Request..." + RESET)
-                pause_exec(retry_pause_interval)
-                
-            elif response.status_code == 200:
-                print(GREEN + f"Success {response.status_code} retrieving posts!" + RESET)
+                # Don't need to display the headers unless we're debugging. Info isn't super relevant.
+                #for header_name, header_value in response.headers.items():
+                #    print(RED + f"{header_name}: {header_value}" + RESET)
+            elif response.status_code == 200 and not is_ping:
+                print(GREEN + f"{response.status_code} OK - Retrieving posts!" + RESET)
                 json_data = response.json()
-                process_json_to_mongodb(json_data, mongodb_client)
+                caught_up = process_json_to_mongodb(json_data, mongodb_client)
                 
                 next_after = json_data['data']['after']
-                return next_after
+                return next_after, caught_up
             
-            else:
-                print(RED + f"Unhandled Error: {response.status_code}" + RESET)
+            retry += 1
+            if retry >= retry_limit:
                 response.raise_for_status()
-                break
-        
+                break 
+                
+            print(CYAN + f"Pausing for {retry_pause_interval} seconds then retrying GET Request..." + RESET)
+            pause_exec(retry_pause_interval)
+            
     except requests.exceptions.RequestException as e:
         print(RED + f"Error fetching data: {e}. Closing Application." + RESET)
         sys.exit(1)
@@ -196,9 +216,13 @@ def loop(mongodb_client):
     after = ""
     for i in range(fetch_pages):
         iteration = i+1
-        print(GREEN + f"Fetching posts from next page: {after} -- Current Fetch Iteration: {iteration} / {fetch_pages}" + RESET)
+        print(MAGENTA + f"Fetching posts from next page: {after} -- Current Fetch Iteration: {iteration} / {fetch_pages}" + RESET)
         
-        after = fetch_reddit_posts(after, mongodb_client)  
+        after, caught_up = fetch_reddit_posts(after, mongodb_client)
+        
+        if caught_up:
+            print(CYAN + f"Duplicate posts detected. You are all caught up. Ending fetch process.")
+            break
         
         print(CYAN + f"Pausing for {interval} seconds." + RESET)
         pause_exec(interval)
