@@ -2,6 +2,11 @@
 
 Given a page on reddit (`https://www.reddit.com/r/{page}`), scrape the `/.json` post data up to 1000 posts and save it to your MongoDB Cluster.
 
+<img width="752" height="170" alt="reddit_data" src="https://github.com/user-attachments/assets/b0a33a68-6e52-4f64-a888-e50853d7cc44" />
+
+<img width="785" height="242" alt="reddit_data_retry" src="https://github.com/user-attachments/assets/ef7c03b0-057a-46d1-92fc-f4c478f85745" />
+
+
 ## Project Setup
 
 1. Create your MongoDB Database and Collection (Cloud or Local)
